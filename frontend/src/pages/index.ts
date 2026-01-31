@@ -1,0 +1,11 @@
+export { Dashboard } from './Dashboard';
+export { StudyPlanner } from './StudyPlanner';
+export { NotesGenerator } from './NotesGenerator';
+export { Quiz } from './Quiz';
+export { Analytics } from './Analytics';
+export { Tasks } from './Tasks';
+export { Goals } from './Goals';
+export { Habits } from './Habits';
+export { Settings } from './Settings';
+export { CareerGuidance } from './CareerGuidance';
+export { Login, Register } from './auth';

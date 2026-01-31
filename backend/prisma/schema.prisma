@@ -1,0 +1,321 @@
+// Prisma Schema for StudyOS (PostgreSQL Production Ready)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER MODEL
+// ============================================
+model User {
+  id            String   @id @default(cuid())
+  name          String
+  email         String   @unique
+  password      String
+  avatarUrl     String?
+  streak        Int      @default(0)
+  role          String   @default("STUDENT")
+  coins         Int       @default(0)
+  currentXP     Int       @default(0)
+  level         Int       @default(1)
+  bio           String?
+  skills        String    @default("[]") // JSON
+  
+  // Verification & Payments
+  isVerified       Boolean @default(false)
+  stripeCustomerId String?
+  subscriptionStatus String @default("FREE") // FREE, PRO
+  subscriptionId   String?
+
+  // Subscription
+  subscriptionTier String        @default("FREE") // FREE, PRO, PREMIUM
+  subscriptionEndsAt DateTime?
+  subscriptions    Subscription[]
+
+  lastActiveAt  DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tasks         Task[]
+  studySessions StudySession[]
+  subjects      Subject[]
+  habits        Habit[]
+  goals         Goal[]
+  aiInsights    AIInsight[]
+  groups        StudyGroup[] @relation("GroupMembers")
+  messages      Message[]
+  badges        UserBadge[]
+  
+  posts         Post[]
+  comments      Comment[]
+  groupMembers  GroupMember[] // Renamed from 'groups' to avoid conflict with StudyGroup[]
+
+  @@index([email])
+}
+
+// ============================================
+// SUBSCRIPTION MODEL
+// ============================================
+model Subscription {
+  id              String   @id @default(cuid())
+  userId          String
+  stripeId        String   @unique
+  status          String   // active, canceled, past_due
+  priceId         String
+  currentPeriodEnd DateTime
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ============================================
+// HABIT MODEL
+// ============================================
+model Habit {
+  id             String    @id @default(cuid())
+  userId         String
+  title          String
+  frequency      Int       @default(7)
+  streak         Int       @default(0)
+  completedDates String    @default("[]") // JSON of DateTime strings
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ============================================
+// TASK MODEL
+// ============================================
+model Task {
+  id          String    @id @default(cuid())
+  userId      String
+  title       String
+  description String?
+  subject     String?
+  priority    String    @default("MEDIUM")
+  status      String    @default("PENDING")
+  duration    Int?
+  dueDate     DateTime?
+  completedAt DateTime?
+  rewarded    Boolean   @default(false) 
+
+  // Smart Planner Fields
+  estimatedMinutes Int     @default(30)
+  isRecurring      Boolean @default(false)
+  recurrenceRule   String? // "DAILY", "WEEKLY", or custom "FREQ=WEEKLY;INTERVAL=2"
+  parentTaskId     String? // Links instances of the same recurring habit
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([parentTaskId])
+}
+
+// ============================================
+// STUDY SESSION MODEL
+// ============================================
+model StudySession {
+  id         String    @id @default(cuid())
+  userId     String
+  subject    String?
+  startTime  DateTime  @default(now())
+  endTime    DateTime?
+  duration   Int?      // In seconds
+  focusScore Int?      // 0-100
+  notes      String?
+  status     String    @default("COMPLETED") // COMPLETED, ABANDONED
+  
+  // Phase 4: Focus Modes
+  type          FocusType @default(POMODORO)
+  
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([startTime])
+}
+
+// ============================================
+// AI INSIGHT MODEL
+// ============================================
+model AIInsight {
+  id          String      @id @default(cuid())
+  userId      String
+  type        String
+  title       String
+  content     String
+  metadata    String?     // JSON string
+  viewed      Boolean     @default(false)
+  createdAt   DateTime    @default(now())
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+}
+
+// ============================================
+// SUBJECT MODEL
+// ============================================
+model Subject {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  color       String   @default("#3B82F6")
+  totalHours  Float    @default(0)
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+// ============================================
+// GOAL MODEL
+// ============================================
+model Goal {
+  id          String     @id @default(cuid())
+  userId      String
+  title       String
+  target      Int
+  current     Int        @default(0)
+  unit        String     @default("hours")
+  period      String     @default("WEEKLY")
+  status      String     @default("ACTIVE")
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ============================================
+// GAMIFICATION MODELS
+// ============================================
+model Badge {
+  id          String      @id @default(cuid())
+  name        String
+  description String
+  icon        String
+  criteria    String
+  users       UserBadge[]
+}
+
+model UserBadge {
+  userId    String
+  badgeId   String
+  earnedAt  DateTime @default(now())
+
+  user      User    @relation(fields: [userId], references: [id])
+  badge     Badge   @relation(fields: [badgeId], references: [id])
+
+  @@id([userId, badgeId])
+}
+
+// ============================================
+// COMMUNITY MODELS
+// ============================================
+model Group {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  isPublic    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  members     GroupMember[]
+  posts       Post[]
+}
+
+model GroupMember {
+  userId    String
+  groupId   String
+  role      String    @default("MEMBER")
+  joinedAt  DateTime  @default(now())
+  
+  user      User   @relation(fields: [userId], references: [id])
+  group     Group  @relation(fields: [groupId], references: [id])
+
+  @@id([userId, groupId])
+}
+
+model Post {
+  id        String    @id @default(cuid())
+  authorId  String
+  groupId   String
+  content   String
+  likes     Int       @default(0)
+  createdAt DateTime  @default(now())
+  comments  Comment[]
+
+  author    User   @relation(fields: [authorId], references: [id])
+  group     Group  @relation(fields: [groupId], references: [id])
+
+  @@index([groupId])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  postId    String
+  authorId  String
+  content   String
+  createdAt DateTime @default(now())
+
+  post      Post   @relation(fields: [postId], references: [id])
+  author    User   @relation(fields: [authorId], references: [id])
+
+  @@index([postId])
+}
+
+model StudyGroup {
+  id          String    @id @default(uuid())
+  name        String
+  description String?
+  members     User[]    @relation("GroupMembers")
+  messages    Message[]
+  createdAt   DateTime  @default(now())
+}
+
+model Message {
+  id        String     @id @default(uuid())
+  content   String
+  senderId  String
+  sender    User       @relation(fields: [senderId], references: [id])
+  groupId   String
+  group     StudyGroup @relation(fields: [groupId], references: [id])
+  createdAt DateTime   @default(now())
+}
+
+// ============================================
+// CAREER MODELS
+// ============================================
+model Job {
+  id           String   @id @default(cuid())
+  title        String
+  company      String
+  location     String
+  type         String
+  description  String
+  requirements String   @default("[]") // JSON
+  applyUrl     String?
+  postedAt     DateTime @default(now())
+}
+
+enum FocusType {
+  POMODORO
+  DEEP_WORK
+}

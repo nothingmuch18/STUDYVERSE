@@ -1,0 +1,314 @@
+// Prisma Schema for StudyOS
+// Using Supabase PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER MODEL
+// ============================================
+model User {
+  id            String   @id @default(cuid())
+  name          String
+  email         String   @unique
+  password      String   // bcrypt hashed
+  avatarUrl     String?
+  streak        Int      @default(0)
+  role          UserRole  @default(STUDENT) // [NEW]
+  coins         Int       @default(0)       // [NEW]
+  bio           String?                     // [NEW]
+  skills        String[]                    // [NEW]
+  lastActiveAt  DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  tasks         Task[]
+  sessions      StudySession[]
+  insights      AIInsight[]
+  subjects      Subject[]
+  goals         Goal[]
+  habits        Habit[]
+  badges        UserBadge[]
+  
+  // Community
+  posts         Post[]
+  comments      Comment[]
+  groups        GroupMember[]
+
+  @@index([email])
+}
+
+// ============================================
+// HABIT MODEL
+// ============================================
+model Habit {
+  id             String    @id @default(cuid())
+  userId         String
+  title          String
+  frequency      Int       @default(7) // Days per week
+  streak         Int       @default(0)
+  completedDates DateTime[] // Array of completion dates
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // Relations
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ============================================
+// TASK MODEL
+// ============================================
+model Task {
+  id          String    @id @default(cuid())
+  userId      String
+  title       String
+  description String?
+  subject     String?
+  priority    Priority  @default(MEDIUM)
+  status      TaskStatus @default(PENDING)
+  duration    Int?      // estimated minutes
+  dueDate     DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+// ============================================
+// STUDY SESSION MODEL
+// ============================================
+model StudySession {
+  id          String    @id @default(cuid())
+  userId      String
+  subject     String?
+  startTime   DateTime  @default(now())
+  endTime     DateTime?
+  duration    Int?      // actual minutes
+  focusScore  Int?      // 0-100
+  notes       String?
+  createdAt   DateTime  @default(now())
+
+  // Relations
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([startTime])
+}
+
+// ============================================
+// AI INSIGHT MODEL
+// ============================================
+model AIInsight {
+  id          String      @id @default(cuid())
+  userId      String
+  type        InsightType
+  title       String
+  content     String
+  metadata    Json?       // Additional AI response data
+  viewed      Boolean     @default(false)
+  createdAt   DateTime    @default(now())
+
+  // Relations
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+}
+
+enum InsightType {
+  RECOMMENDATION
+  MOTIVATION
+  ANALYSIS
+  WARNING
+  ACHIEVEMENT
+}
+
+// ============================================
+// SUBJECT MODEL
+// ============================================
+model Subject {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  color       String   @default("#3B82F6")
+  totalHours  Float    @default(0)
+  createdAt   DateTime @default(now())
+
+  // Relations
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+// ============================================
+// GOAL MODEL
+// ============================================
+model Goal {
+  id          String     @id @default(cuid())
+  userId      String
+  title       String
+  target      Int        // target value (hours, tasks, etc.)
+  current     Int        @default(0)
+  unit        String     @default("hours")
+  period      GoalPeriod @default(WEEKLY)
+  status      GoalStatus @default(ACTIVE)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  // Relations
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+enum GoalPeriod {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum GoalStatus {
+  ACTIVE
+  COMPLETED
+  FAILED
+  PAUSED
+}
+
+enum UserRole {
+  STUDENT
+  MENTOR
+  ADMIN
+}
+
+// ============================================
+// GAMIFICATION MODELS
+// ============================================
+model Badge {
+  id          String      @id @default(cuid())
+  name        String
+  description String
+  icon        String
+  criteria    String      // JSON logic or description
+  users       UserBadge[]
+}
+
+model UserBadge {
+  userId    String
+  badgeId   String
+  earnedAt  DateTime @default(now())
+
+  user      User    @relation(fields: [userId], references: [id])
+  badge     Badge   @relation(fields: [badgeId], references: [id])
+
+  @@id([userId, badgeId])
+}
+
+// ============================================
+// COMMUNITY MODELS
+// ============================================
+model Group {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  isPublic    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  members     GroupMember[]
+  posts       Post[]
+}
+
+model GroupMember {
+  userId    String
+  groupId   String
+  role      GroupRole @default(MEMBER)
+  joinedAt  DateTime  @default(now())
+  
+  user      User   @relation(fields: [userId], references: [id])
+  group     Group  @relation(fields: [groupId], references: [id])
+
+  @@id([userId, groupId])
+}
+
+enum GroupRole {
+  MEMBER
+  MODERATOR
+  ADMIN
+}
+
+model Post {
+  id        String    @id @default(cuid())
+  authorId  String
+  groupId   String
+  content   String
+  likes     Int       @default(0)
+  createdAt DateTime  @default(now())
+  comments  Comment[]
+
+  author    User   @relation(fields: [authorId], references: [id])
+  group     Group  @relation(fields: [groupId], references: [id])
+
+  @@index([groupId])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  postId    String
+  authorId  String
+  content   String
+  createdAt DateTime @default(now())
+
+  post      Post   @relation(fields: [postId], references: [id])
+  author    User   @relation(fields: [authorId], references: [id])
+
+  @@index([postId])
+}
+
+// ============================================
+// CAREER MODELS
+// ============================================
+model Job {
+  id           String   @id @default(cuid())
+  title        String
+  company      String
+  location     String
+  type         JobType
+  description  String
+  requirements String[]
+  applyUrl     String?
+  postedAt     DateTime @default(now())
+}
+
+enum JobType {
+  INTERNSHIP
+  FREELANCE
+  FULL_TIME
+  PART_TIME
+}
