@@ -5,10 +5,14 @@ import { prisma } from '../lib/prisma.js';
 import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-    apiVersion: '2025-01-27.acacia', // Use latest API version
+const stripeKey = process.env.STRIPE_SECRET_KEY || 'sk_test_dummy';
+const stripe = new Stripe(stripeKey, {
+    apiVersion: '2025-01-27.acacia' as any,
 });
+
+if (!process.env.STRIPE_SECRET_KEY) {
+    console.warn('⚠️ STRIPE_SECRET_KEY is missing. Payment features will fail.');
+}
 
 // Create Checkout Session
 router.post('/create-checkout-session', authenticateToken, async (req: any, res) => {
@@ -78,6 +82,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
                     where: { id: userId },
                     data: {
                         subscriptionStatus: 'PRO',
+                        subscriptionTier: 'PRO',
                         stripeCustomerId: session.customer as string,
                         subscriptionId: session.subscription as string,
                     },
@@ -94,7 +99,10 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
             const customerId = sub.customer as string;
             await prisma.user.updateMany({
                 where: { stripeCustomerId: customerId },
-                data: { subscriptionStatus: 'FREE' }
+                data: {
+                    subscriptionStatus: 'FREE',
+                    subscriptionTier: 'FREE'
+                }
             });
             console.log(`Subscription deleted for customer ${customerId}`);
             break;
